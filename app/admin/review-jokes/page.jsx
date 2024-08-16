@@ -1,42 +1,17 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import Modal from '../../../components/Modal'; // Adjust the path according to your project structure
-
-// Mock function to get jokes (replace with actual data fetching logic)
-const fetchJokes = () => {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve([
-      { id: 1, text: 'Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry', type: 'funny', isPublic: false },
-      { id: 2, text: 'This is a dark joke.', type: 'dark', isPublic: false },
-    ]), 500);
-  });
-};
-
-// Mock function to update joke (replace with actual API call)
-const updateJoke = (id, updatedJoke) => {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(updatedJoke), 500);
-  });
-};
-
-// Mock function to delete joke (replace with actual API call)
-const deleteJoke = (id) => {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(id), 500);
-  });
-};
-
-// Mock function to make joke public (replace with actual API call)
-const makePublicJoke = (id) => {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(id), 500);
-  });
-};
+import Modal from '../../../components/Modal'; 
+import { 
+  getAllNewJokesForAdmin, 
+  acceptJoke, 
+  editJoke, 
+  deleteJoke 
+} from '@/Services/JokesService';
 
 export default function AdminReview() {
   const [jokes, setJokes] = useState([]);
-  const [editingJoke, setEditingJoke] = useState(null);
+  const [editingJokeId, setEditingJokeId] = useState(null);
   const [newText, setNewText] = useState('');
   const [newType, setNewType] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -48,12 +23,17 @@ export default function AdminReview() {
   }, []);
 
   const loadJokes = async () => {
-    const fetchedJokes = await fetchJokes();
-    setJokes(fetchedJokes);
+    try {
+      const response = await getAllNewJokesForAdmin();
+      console.log(response.data);
+      setJokes(response.data);
+    } catch (error) {
+      console.error("Error loading jokes:", error);
+    }
   };
 
   const handleEditClick = (joke) => {
-    setEditingJoke(joke);
+    setEditingJokeId(joke.id);
     setNewText(joke.text);
     setNewType(joke.type);
   };
@@ -65,17 +45,29 @@ export default function AdminReview() {
   };
 
   const handleModalConfirm = async () => {
-    if (modalAction === 'update' && editingJoke) {
-      const updatedJoke = { ...editingJoke, text: newText, type: newType };
-      await updateJoke(editingJoke.id, updatedJoke);
-      setJokes(jokes.map(joke => joke.id === editingJoke.id ? updatedJoke : joke));
-      setEditingJoke(null);
+    if (modalAction === 'update' && editingJokeId) {
+      try {
+        const updatedJoke = { ...jokes.find(joke => joke.id === editingJokeId), text: newText, type: newType };
+        await editJoke(editingJokeId, updatedJoke);
+        setJokes(jokes.map(joke => joke.id === editingJokeId ? updatedJoke : joke));
+        setEditingJokeId(null);
+      } catch (error) {
+        console.error("Error updating joke:", error);
+      }
     } else if (modalAction === 'delete') {
-      await deleteJoke(selectedJokeId);
-      setJokes(jokes.filter(joke => joke.id !== selectedJokeId));
+      try {
+        await deleteJoke(selectedJokeId);
+        setJokes(jokes.filter(joke => joke.id !== selectedJokeId));
+      } catch (error) {
+        console.error("Error deleting joke:", error);
+      }
     } else if (modalAction === 'makePublic') {
-      await makePublicJoke(selectedJokeId);
-      setJokes(jokes.map(joke => joke.id === selectedJokeId ? { ...joke, isPublic: true } : joke));
+      try {
+        await acceptJoke({ id: selectedJokeId });
+        setJokes(jokes.map(joke => joke.id === selectedJokeId ? { ...joke, isPublic: true } : joke));
+      } catch (error) {
+        console.error("Error making joke public:", error);
+      }
     }
     setIsModalOpen(false);
   };
@@ -90,7 +82,7 @@ export default function AdminReview() {
       <div className="space-y-4">
         {jokes.map((joke) => (
           <div key={joke.id} className="p-4 border border-gray-300 rounded-md shadow-sm">
-            {editingJoke?.id === joke.id ? (
+            {editingJokeId === joke.id ? (
               <div>
                 <textarea
                   value={newText}
@@ -113,7 +105,7 @@ export default function AdminReview() {
                   Update
                 </button>
                 <button
-                  onClick={() => setEditingJoke(null)}
+                  onClick={() => setEditingJokeId(null)}
                   className="py-2 px-4 bg-gray-500 text-white font-semibold rounded-md shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500"
                 >
                   Cancel

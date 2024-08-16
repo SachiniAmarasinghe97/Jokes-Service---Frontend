@@ -4,113 +4,72 @@
 import { useState, useEffect } from "react";
 import AOS from "aos";
 import "aos/dist/aos.css";
-import {getAllApprovedJokes} from '../Services/JokesService'
-// import { submitJokesAPI } from '../utils/axiosInstance';
-
-
-// Mock function to get types (e.g., from a database)
-const fetchTypes = () => {
-  // Simulate fetching types from a database
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(["all", "funny", "dark"]), 500);
-  });
-};
-
-// Mock function to get jokes
-// const fetchJokes = (start, count, type = 'all') => {
-//   const allJokes = Array.from({ length: count }, (_, i) => ({
-//     id: start + i,
-//     text: `Joke number ${start + i + 1}`,
-//     type: i % 2 === 0 ? 'funny' : 'dark', // Example types: 'funny' and 'dark'
-//   }));
-//   const filteredJokes = type === 'all' ? allJokes : allJokes.filter(joke => joke.type === type);
-//   return new Promise((resolve) => {
-//     setTimeout(() => resolve(filteredJokes), 500);
-//   });
-// };
-
-
+import { getAllApprovedJokes, getUniqueTypes, submitJoke } from '../Services/JokesService';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 export default function Home() {
   const [jokes, setJokes] = useState([]);
+  const [filteredJokes, setFilteredJokes] = useState([]);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
   const [types, setTypes] = useState([]);
   const [popupVisible, setPopupVisible] = useState(false);
   const [newJoke, setNewJoke] = useState("");
+  const [newJokeType, setNewJokeType] = useState("");
+  const [newType, setNewType] = useState(""); // Separate state for new type input
   const [addingJoke, setAddingJoke] = useState(false);
 
   useEffect(() => {
-
     AOS.init();
     fetchJokes();
-    loadTypes();
+    fetchTypes();
   }, []);
-
-  // useEffect(() => {
-  //   loadJokes();
-  // }, [activeTab]);
 
   const fetchJokes = async () => {
     try {
       const response = await getAllApprovedJokes();
       setJokes(response.data);
-      console.log(JSON.stringify(response.data))
+      setFilteredJokes(response.data);
     } catch (error) {
       console.error("Error fetching jokes:", error);
-      return [];
     }
   };
 
-  const loadTypes = async () => {
-    // Simulate fetching types from a database
-    const fetchedTypes = await fetchTypes();
-    setTypes(fetchedTypes);
-  };
-
-  const loadJokes = async () => {
-    setLoading(true);
-    const newJokes = await fetchJokes(page * 5, 5, activeTab);
-    setJokes((prevJokes) => [...prevJokes, ...newJokes]);
-    setPage((prevPage) => prevPage + 1);
-    setLoading(false);
+  const fetchTypes = async () => {
+    try {
+      const response = await getUniqueTypes();
+      setTypes(["all", ...response.data]);
+    } catch (error) {
+      console.error("Error fetching types:", error);
+    }
   };
 
   const handleTabClick = (type) => {
     setActiveTab(type);
-    setJokes([]);
-    setPage(0);
-    loadJokes();
+    if (type === "all") {
+      setFilteredJokes(jokes);
+    } else {
+      const filtered = jokes.filter(joke => joke.type === type);
+      setFilteredJokes(filtered);
+    }
   };
 
-  // const handleAddJoke = async () => {
-  //   setAddingJoke(true);
-  //   // Simulate adding a joke (e.g., to a database)
-  //   setTimeout(() => {
-  //     setJokes([{ id: Date.now(), text: newJoke, type: activeTab }, ...jokes]);
-  //     setNewJoke('');
-  //     setAddingJoke(false);
-  //     setPopupVisible(false);
-  //   }, 500);
-  // };
-
   const handleAddJoke = async () => {
+    if (!newJoke) return;
     setAddingJoke(true);
     try {
-      const response = await submitJokesAPI.post("/create", {
-        content: newJoke,
-        type: activeTab, // Assuming the joke type is based on the active tab
-      });
-
-      // Assuming the response contains the new joke
-      setJokes([
-        { id: response.data._id, content: newJoke, type: activeTab },
-        ...jokes,
-      ]);
+      const jokeType = newJokeType === "new" ? newType : newJokeType;
+      await submitJoke({ content: newJoke, type: jokeType });
       setNewJoke("");
+      setNewJokeType("");
+      setNewType("");
       setPopupVisible(false);
+      toast.success("Joke added successfully!");
+      fetchJokes(); // Reload jokes to include the newly added one
     } catch (error) {
+      toast.error("Failed to add joke.");
       console.error("Error adding joke:", error);
     } finally {
       setAddingJoke(false);
@@ -145,7 +104,7 @@ export default function Home() {
           </button>
         </div>
         <div className="space-y-4 mb-6">
-          { jokes.length > 0  && jokes.map((joke) => (
+          {filteredJokes.length > 0  && filteredJokes.map((joke) => (
             <div
               key={joke.id}
               data-aos="fade-up"
@@ -154,15 +113,6 @@ export default function Home() {
               {joke.content}
             </div>
           ))}
-        </div>
-        <div className="text-center mt-6">
-          <button
-            onClick={loadJokes}
-            disabled={loading}
-            className="py-2 px-4 bg-blue-600 text-white font-semibold rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {loading ? "Loading..." : "Load More"}
-          </button>
         </div>
       </div>
 
@@ -178,6 +128,28 @@ export default function Home() {
               className="w-full p-2 border border-gray-300 rounded-md"
               placeholder="Enter your joke here..."
             />
+            <select
+              value={newJokeType}
+              onChange={(e) => setNewJokeType(e.target.value)}
+              className="w-full p-2 mt-4 border border-gray-300 rounded-md"
+            >
+              <option value="">Select Type</option>
+              {types.filter(type => type !== "all").map(type => (
+                <option key={type} value={type}>
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                </option>
+              ))}
+              <option value="new">Add New Type</option>
+            </select>
+            {newJokeType === "new" && (
+              <input
+                type="text"
+                value={newType}
+                onChange={(e) => setNewType(e.target.value)}
+                className="w-full p-2 mt-2 border border-gray-300 rounded-md"
+                placeholder="Enter new joke type..."
+              />
+            )}
             <div className="flex justify-end mt-4">
               <button
                 onClick={() => setPopupVisible(false)}
@@ -196,6 +168,7 @@ export default function Home() {
           </div>
         </div>
       )}
+      <ToastContainer/>
     </div>
   );
 }

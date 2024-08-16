@@ -6,6 +6,6 @@ const headers = {
 };
 export const userLogin = async (data) => {
 
-    return await axios.post(apiEndPoint + "login",data,{headers})
+    return await axios.post(apiEndPoint + "login" ,data,{headers})
     
 }

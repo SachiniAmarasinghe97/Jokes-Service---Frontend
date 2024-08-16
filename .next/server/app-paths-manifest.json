@@ -1,3 +1,4 @@
 {
+  "/admin/review-jokes/page": "app/admin/review-jokes/page.js",
   "/page": "app/page.js"
 }
